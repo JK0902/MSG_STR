@@ -1,151 +1,179 @@
 # Patient-Centered, Graph-Augmented AI-Enabled Passive Surveillance for Early Stroke Risk Detection
 
-## Overview
+This repository contains the modular, public-facing analysis code for the study **Patient-Centered, Graph-Augmented Artificial Intelligence-Enabled Passive Surveillance for Early Stroke Risk Detection in High-Risk Individuals**.
 
-This repository accompanies the study:
+The refactor replaces monolithic notebook cells with small manuscript-aligned notebooks and tested Python modules. No patient-level data or portal-message text are distributed.
 
-**Patient-Centered, Graph-Augmented Artificial Intelligence-Enabled Passive Surveillance for Early Stroke Risk Detection in High-Risk Individuals**
+## Study overview
 
-The project demonstrates how **patient-reported language from secure portal messages**, analyzed using **large language models (LLMs)** and **graph-based machine learning**, can be transformed into interpretable signals for **early stroke risk detection** among individuals with diabetes.
+The project evaluates whether patient-reported language from secure portal messages can be transformed into interpretable signals for early stroke-risk detection among individuals with diabetes. The framework combines an iterative LLM-guided symptom taxonomy, structured symptom annotation, Elastic Net/LASSO, graph-derived symptom importance, and a conservative hybrid screening simulation.
 
-Rather than relying on structured EHR data or acute presentations, this work focuses on **passively collected, real-world symptom descriptions written in patients’ own words**, enabling **proactive risk recognition prior to stroke events**.
+The study objectives were to:
 
----
+1. construct a hierarchical, patient-centered symptom representation;
+2. identify early stroke-associated symptom patterns;
+3. translate model outputs into a clinically interpretable screening signal; and
+4. evaluate the feasibility of pre-event risk detection using passively collected messages.
 
-## Objectives
+The reported taxonomy included 35 main topics, 109 subtopics, and 495 granular concepts. The screening simulation evaluated 3–90-day windows and prioritized specificity above 0.90 and low alert burden.
 
-The primary objectives of this project are to:
+## Analysis blocks
 
-### 1. Develop a patient-centered symptom representation  
-Construct a hierarchical, interpretable symptom taxonomy grounded in how patients naturally describe their concerns in secure messages.
+| Manuscript component | Stepwise notebook | Reusable implementation |
+|---|---|---|
+| Iterative LLM-guided taxonomy | `notebooks/01_MSG_Stroke_Supple_Modular.ipynb` | `taxonomy.py` |
+| BERTopic semantic validation | Notebook 01, Blocks 3–4 | `bertopic_validation.py` |
+| LLM symptom annotation | Notebook 01, Blocks 5–6 | `llm_annotation.py` |
+| Hybrid screening simulation | `notebooks/02_Hybrid_Screening_Modular.ipynb` | `screening.py`, `metrics.py` |
+| Separate GNN graph ablation | `notebooks/03_GNN_Ablation_Modular.ipynb` | `gnn_ablation.py`, `gnn_ablation_report.py` |
 
-### 2. Identify early stroke-associated symptom patterns  
-Use a dual machine-learning framework (Elastic Net / LASSO and heterogeneous Graph Neural Networks) to detect symptom patterns that are statistically and temporally associated with future stroke.
+The GNN ablation is intentionally separate from the primary workflow. It measures changes in symptom prioritization after graph-derived terms are introduced; it is not interpreted as evidence of improved patient-level discrimination.
 
-### 3. Translate model outputs into a clinically usable screening signal  
-Design and evaluate a high-specificity, low-burden hybrid screening system suitable for EHR-based passive surveillance.
+## Repository structure
 
-### 4. Demonstrate feasibility of proactive, pre-event stroke risk detection  
-Show that patient-reported language alone can support early risk detection with meaningful lead time for clinical evaluation.
+```text
+MSG_STR_block_based/
+├── config/                 # Public-safe configuration template
+├── data/                   # Input contracts; no study data
+├── docs/                   # Manuscript crosswalk and review checklist
+├── notebooks/              # Small, numbered execution blocks
+├── scripts/                # Command-line entry points
+├── src/msg_str/            # Tested reusable analysis functions
+├── tests/                  # Unit and synthetic integration tests
+├── .github/workflows/      # Automated checks on every push/PR
+├── pyproject.toml
+└── requirements.txt
+```
 
----
+## Installation
 
-## Methods Summary
+```bash
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e .
+```
 
-### Data Source and Cohort
+Optional dependencies:
 
-- Retrospective cohort from a large academic health system (2014–2024)
-- Adults with diabetes, with and without subsequent ischemic stroke
-- De-identified secure patient portal messages (HIPAA Safe Harbor)
-- Case–control matching by age, sex, race, ethnicity, and marital status
+```bash
+# BERTopic and sentence embeddings
+python -m pip install -e ".[topic]"
 
----
+# Google GenAI message annotation
+python -m pip install -e ".[llm]"
+```
 
-### Iterative LLM-Guided Symptom Taxonomy
+## Privacy guard
 
-- Built a **3-level hierarchy (MAIN → SUB1 → SUB2)** using an iterative LLM-guided process  
-- Existing topics preserved whenever possible; new topics added only when clinically novel  
-- Independent investigator review with high inter-rater reliability (Gwet’s AC1)  
-- External validation using **BERTopic** to assess semantic overlap  
-- Messages converted into structured symptom annotations using LLMs  
+Message-text processing is disabled by default:
 
----
+```python
+from msg_str.config import PrivacyConfig
 
-### Graph-Augmented Dual Machine Learning Pipeline
+privacy = PrivacyConfig(
+    safe_mode=True,
+    allow_text_input=False,
+)
+```
 
-- **Elastic Net / LASSO logistic regression** for stable feature selection  
-- **Heterogeneous Graph Neural Network (GraphSAGE)** modeling:
-  - Patients, symptoms, comorbidities, and temporal message structure  
-  - Optional semantic similarity edges via sentence embeddings  
+`allow_text_input=True` should be used only inside an approved secure environment. The public code logs aggregate counts only and does not export raw message text.
 
-**Symptom importance estimation:**
-- GNN event-loss attribution  
-- Elastic Net permutation importance  
-- Combined into a unified **event association score**
+## Block 1: taxonomy and BERTopic validation
 
----
+```bash
+PYTHONPATH=src python scripts/run_topic_validation.py \
+  --messages-csv data/deidentified_messages.csv \
+  --taxonomy-csv data/publishable_seed_taxonomy.csv \
+  --out-dir results/topic_validation \
+  --allow-text-input
+```
 
-### Hybrid Stroke Risk Screening Simulation
+This command should be run only in the approved environment containing de-identified message text.
 
-- Simulated EHR-based screening across **3–90 day windows**
-- Combined:
-  - Interpretable symptom-count rules  
-  - Logistic regression risk scores  
-- Screening thresholds optimized to **prioritize specificity (>0.9)** and minimize false alerts  
-- Performance evaluated via **temporal validation blocks**
+## Block 2: hybrid screening simulation
 
----
+```bash
+PYTHONPATH=src python scripts/run_screening.py \
+  --messages-csv data/screening_messages.csv \
+  --rubric-csv data/symptom_risk_rubric.csv \
+  --out-dir results/screening \
+  --windows 3,7,14,30,60,90 \
+  --prevalence 0.10 \
+  --minimum-specificity 0.90
+```
 
-## Key Findings
+The refactored screening implementation:
 
-### Rich symptom diversity
-- **35** main topics  
-- **109** subtopics  
-- **495** granular symptom concepts identified from patient language  
+- uses a single parameterized function for all window lengths;
+- removes duplicated 3-day rule functions;
+- obtains probabilities from the fitted logistic estimator instead of undefined global coefficients;
+- evaluates probabilities on held-out rows;
+- calculates sensitivity, specificity, precision, NPV, prevalence-adjusted PPV/NPV, F1, accuracy, and alert burden; and
+- applies deterministic operating-point selection under the specificity constraint.
 
-### Clinically meaningful early signals
-High-risk symptoms clustered into domains including:
-- Vascular monitoring and cardiology concerns  
-- Frailty and functional decline  
-- Early neurologic symptoms (e.g., dizziness, gait issues)  
-- Acute inflammatory or biologic triggers  
+## Block 3: separate GNN graph-component ablation
 
-### High-precision screening performance
-- **Specificity:** 1.00  
-- **Prevalence-adjusted PPV:** 1.00  
-- **Sensitivity:** up to 0.72 (highest in 90-day window)  
-- **Alert burden:** 16–35%, depending on window  
+Full ablation:
 
-### Actionable lead time
-Longer screening windows (60–90 days) provided improved sensitivity while maintaining conservative alerting behavior.
+```bash
+PYTHONPATH=src python scripts/run_gnn_ablation.py \
+  --input-csv data/symptom_importance_with_elasticnet.csv \
+  --out-dir results/gnn_ablation \
+  --percentile-threshold 80 \
+  --top-k-values 10,20 \
+  --graph-weight 0.5
+```
 
----
+Only the two manuscript-reported results:
 
-## Repository Scope
+```bash
+PYTHONPATH=src python scripts/report_gnn_ablation.py \
+  --input-csv data/symptom_importance_with_elasticnet.csv \
+  --out-dir results/gnn_ablation_reported \
+  --percentile-threshold 80 \
+  --top-k-values 10,20 \
+  --graph-weight 0.5
+```
 
-This public repository provides:
+The focused script reports:
 
-- Documentation of the methodological framework  
-- Example code structures and pseudocode for:
-  - LLM-guided taxonomy building  
-  - Graph-augmented machine learning pipelines  
-  - Hybrid screening logic  
-- Configuration templates for privacy-preserving analysis  
+1. Spearman correlation, mean absolute rank change, and top-10/top-20 overlap between graph-augmented and no-graph event-association rankings.
+2. Symptom topics selected by the graph-augmented candidate rule but not by the no-graph rule.
 
-### This repository does **NOT** include:
-- Raw patient messages  
-- Identifiable EHR data  
-- Deployed clinical decision support tools  
-- Real-time surveillance systems  
+## Automated verification
 
----
+```bash
+PYTHONPATH=src python -m unittest discover -s tests -v
+python -m compileall -q src scripts
+```
 
-## Intended Use
+The tests cover privacy guards, taxonomy seed construction, LLM-output parsing, screening feature aggregation, held-out logistic scoring, screening metrics, hybrid threshold scans, GNN composite formulas, rank statistics, and graph-only candidate-set differences.
 
-This work is intended for:
+GitHub Actions runs the same checks on each push and pull request.
 
-- Research transparency and reproducibility  
-- Methodological reference for clinical NLP and graph ML  
-- Academic and educational use  
+## Reproducibility and code review
 
-**This repository is not intended for direct clinical deployment** without prospective validation, institutional approval, and regulatory review.
+- All public functions have explicit inputs and outputs.
+- Random-state parameters are fixed and configurable.
+- Input schemas are validated before analysis.
+- Generated results are excluded from source control.
+- The manuscript-to-code mapping is documented in `docs/MANUSCRIPT_CODE_CROSSWALK.md`.
+- An independent reviewer can use `docs/CODE_REVIEW_CHECKLIST.md` to document review.
 
----
+Automated tests reduce implementation risk but do not replace independent scientific code review. A coauthor or independent analyst should review the repository before the final journal submission.
 
-## Ethics and Privacy
+## Intended use
 
-- All analyses were conducted in a HIPAA-compliant environment  
-- Only de-identified data were used  
-- IRB approval obtained  
-- No patient-level text is shared in this repository  
+This repository is provided for research transparency, reproducibility, and academic use. It is not a deployed clinical decision-support system and is not intended for direct clinical use without prospective validation, institutional approval, and regulatory review.
 
----
+## Data and ethics
+
+All original analyses were conducted in a secure, HIPAA-compliant environment using de-identified data under institutional review. This repository does not include raw messages, identifiable EHR data, model credentials, or patient-level outputs.
 
 ## Citation
 
-If you use this work, please cite the associated manuscript (citation to be added upon publication).
-
----
+The article citation will be added after publication.
 
 ## Contact
 
