@@ -1,0 +1,20 @@
+privacy:
+  safe_mode: true
+  allow_text_input: false
+
+topic_validation:
+  id_column: message_id
+  text_column: message_text
+  embedding_model: all-MiniLM-L6-v2
+  random_state: 42
+
+screening:
+  windows_days: [3, 7, 14, 30, 60, 90]
+  assumed_prevalence: 0.10
+  minimum_specificity: 0.90
+  random_state: 42
+
+gnn_ablation:
+  graph_weight: 0.50
+  percentile_threshold: 80
+  top_k_values: [10, 20]
